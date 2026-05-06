@@ -81,8 +81,8 @@ class KilometrikisaClient:
             logger.info("Found contest_id from form field: %s", self.contest_id)
             return self.contest_id
 
-        # Look for contest_id in inline JavaScript
-        match = re.search(r"contest_id[\"'\s:=]+(\d+)", resp.text)
+        # Look for contest_id / contestId in inline JavaScript
+        match = re.search(r"contest[_]?[iI]d[\s:=]+(\d+)", resp.text)
         if match:
             self.contest_id = match.group(1)
             logger.info("Found contest_id from JS: %s", self.contest_id)

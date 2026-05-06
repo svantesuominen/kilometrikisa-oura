@@ -9,6 +9,10 @@ import logging
 import sys
 from datetime import date, timedelta
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from kilometrikisa import KilometrikisaClient
 from oura_client import OuraClient
 
