@@ -8,7 +8,7 @@ stored in GitHub Actions secrets.
 import logging
 import os
 import subprocess
-from datetime import date
+from datetime import date, timedelta
 
 import requests
 
@@ -106,7 +106,7 @@ class OuraClient:
         while True:
             params: dict = {
                 "start_date": day_str,
-                "end_date": day_str,
+                "end_date": (day + timedelta(days=1)).isoformat(),
             }
             if next_token:
                 params["next_token"] = next_token
