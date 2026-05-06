@@ -45,7 +45,13 @@ class OuraClient:
 
         if new_refresh_token != self.refresh_token:
             self.refresh_token = new_refresh_token
-            self._rotate_github_secret(new_refresh_token)
+            try:
+                self._rotate_github_secret(new_refresh_token)
+            except RuntimeError:
+                logger.warning(
+                    "Could not rotate refresh token in GitHub Secrets. "
+                    "Update OURA_REFRESH_TOKEN manually if the next run fails."
+                )
 
     def _rotate_github_secret(self, new_token: str):
         """Update OURA_REFRESH_TOKEN in GitHub Actions secrets."""
