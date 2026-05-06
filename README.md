@@ -8,8 +8,9 @@ Runs daily at 03:00 Helsinki time, syncing the previous day's cycling workouts.
 
 1. Fetches cycling workouts from the Oura API v2 (`/v2/usercollection/workout`)
 2. Filters for `activity == "cycling"` (both auto-detected and manually tagged)
-3. Sums the `distance` field (meters → km)
-4. Logs into Kilometrikisa and POSTs the km to `/contest/log-save/`
+3. Sums the `distance` field (meters → km, rounded to 1 decimal)
+4. Logs into Kilometrikisa with session cookies and CSRF tokens
+5. POSTs the km total to `/contest/log-save/` for the target date
 
 ## Setup
 
@@ -22,7 +23,7 @@ Runs daily at 03:00 Helsinki time, syncing the previous day's cycling workouts.
 
 ### 2. Bootstrap Oura tokens
 
-Run the auth setup script locally (requires Python 3.10+ and `requests`):
+Run the auth setup script locally (requires Python 3.10+):
 
 ```bash
 pip install requests
@@ -46,28 +47,35 @@ Go to your repo → Settings → Secrets and variables → Actions, and add:
 | `OURA_REFRESH_TOKEN` | From step 2 |
 | `KILOMETRIKISA_USERNAME` | Your Kilometrikisa email/username |
 | `KILOMETRIKISA_PASSWORD` | Your Kilometrikisa password |
-| `GH_PAT` | A GitHub Personal Access Token with `repo` scope (for refresh token rotation) |
+| `GH_PAT` | A GitHub Personal Access Token (see below) |
 
-To create the `GH_PAT`:
+**Creating the `GH_PAT`** (needed for automatic refresh token rotation):
 1. Go to [github.com/settings/tokens](https://github.com/settings/tokens)
-2. Generate a new token (classic) with `repo` scope
+2. Generate a **fine-grained token** scoped to this repo with **Secrets: Read and write** permission, or a classic token with `repo` scope
 3. Store it as the `GH_PAT` secret
 
 ### 5. Done!
 
 The workflow runs daily at 03:00 Helsinki time. You can also trigger it manually from the Actions tab.
 
-## Local testing
+## Local development
+
+Create a `.env` file (already in `.gitignore`):
+
+```
+OURA_CLIENT_ID=...
+OURA_CLIENT_SECRET=...
+OURA_REFRESH_TOKEN=...
+KILOMETRIKISA_USERNAME=...
+KILOMETRIKISA_PASSWORD=...
+```
+
+Then:
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-
-# Set env vars
-export OURA_CLIENT_ID=...
-export OURA_CLIENT_SECRET=...
-export OURA_REFRESH_TOKEN=...
-export KILOMETRIKISA_USERNAME=...
-export KILOMETRIKISA_PASSWORD=...
 
 # Dry run (fetches from Oura but doesn't submit)
 python sync.py --dry-run
@@ -79,14 +87,16 @@ python sync.py --date 2026-05-05
 python sync.py
 ```
 
+**Important:** Each run consumes the Oura refresh token (they are single-use). After local testing, re-run `python auth_setup.py` and update both your `.env` and the `OURA_REFRESH_TOKEN` GitHub secret so the scheduled run doesn't break.
+
 ## Refresh token rotation
 
-Oura's OAuth2 issues a new refresh token each time you use the old one. The script automatically updates the `OURA_REFRESH_TOKEN` GitHub secret after each refresh using the `gh` CLI (pre-installed on GitHub Actions runners). This requires a `GH_PAT` with `repo` scope.
+Oura's OAuth2 issues a new refresh token each time you use the old one. When running on GitHub Actions, the script automatically updates the `OURA_REFRESH_TOKEN` secret via the `gh` CLI (pre-installed on runners). This requires a `GH_PAT` with write access to secrets.
 
-If the token chain breaks (e.g., the action fails mid-rotation), re-run `auth_setup.py` locally and update the `OURA_REFRESH_TOKEN` secret manually.
+If rotation fails (e.g., wrong PAT permissions), the sync still completes but logs a warning with the new token. You can then update the secret manually, or re-run `auth_setup.py`.
 
 ## Notes
 
-- The Oura Ring doesn't have GPS, so cycling distance is estimated from motion data or manually entered in the Oura app. If distance is missing for a workout, it's skipped with a warning.
-- Kilometrikisa doesn't have a public API; this uses the same form endpoints as the web UI. If the site changes its structure, the submission may need updating.
-- The `contest_id` is scraped automatically from the log page each run.
+- The Oura Ring estimates cycling distance from motion data. For more accurate distances, manually enter them in the Oura app. Workouts with no distance data are skipped with a warning.
+- Kilometrikisa doesn't have a public API. This project reverse-engineers the same form endpoints as the web UI (based on [strava2kilometrikisa](https://github.com/jaamo/strava2kilometrikisa)). If the site changes its structure, the submission may need updating.
+- The `contest_id` is scraped automatically from the log page JavaScript each run.
