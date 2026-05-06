@@ -37,12 +37,18 @@ class OuraClient:
                 "client_secret": self.client_secret,
             },
         )
-        resp.raise_for_status()
-        tokens = resp.json()
+        if not resp.ok:
+            logger.error(
+                "Token refresh failed (%d): %s", resp.status_code, resp.text
+            )
+            resp.raise_for_status()
 
+        tokens = resp.json()
         self.access_token = tokens["access_token"]
         new_refresh_token = tokens["refresh_token"]
 
+        # Rotate the secret BEFORE doing anything else -- if this fails and
+        # we continue, the old secret is already invalid (single-use token).
         if new_refresh_token != self.refresh_token:
             self.refresh_token = new_refresh_token
             try:
@@ -50,7 +56,8 @@ class OuraClient:
             except RuntimeError:
                 logger.warning(
                     "Could not rotate refresh token in GitHub Secrets. "
-                    "Update OURA_REFRESH_TOKEN manually if the next run fails."
+                    "New token: %s -- update OURA_REFRESH_TOKEN manually!",
+                    new_refresh_token,
                 )
 
     def _rotate_github_secret(self, new_token: str):
