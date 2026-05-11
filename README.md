@@ -14,47 +14,30 @@ Runs daily at 03:00 Helsinki time, syncing the previous day's cycling workouts.
 
 ## Setup
 
-### 1. Create an Oura API application
+### 1. Create an Oura Personal Access Token
 
-1. Go to [cloud.ouraring.com/oauth/applications](https://cloud.ouraring.com/oauth/applications)
-2. Create a new application
-3. Set the redirect URI to `http://localhost:8080/callback`
-4. Note the **Client ID** and **Client Secret**
+1. Go to [cloud.ouraring.com/personal-access-tokens](https://cloud.ouraring.com/personal-access-tokens)
+2. Create a new token
+3. Copy it — you'll need it in step 3
 
-### 2. Bootstrap Oura tokens
-
-Run the auth setup script locally (requires Python 3.10+):
+### 2. Push this repo to GitHub
 
 ```bash
-pip install requests
-python auth_setup.py
+git remote add origin https://github.com/YOUR_USER/kilometrikisa-oura.git
+git push -u origin master
 ```
 
-This opens your browser, authorizes the app, and prints the tokens. Copy the **refresh token**.
-
-### 3. Create a GitHub repository
-
-Push this code to a GitHub repo (can be private).
-
-### 4. Configure GitHub Secrets
+### 3. Configure GitHub Secrets
 
 Go to your repo → Settings → Secrets and variables → Actions, and add:
 
 | Secret | Value |
 |--------|-------|
-| `OURA_CLIENT_ID` | From step 1 |
-| `OURA_CLIENT_SECRET` | From step 1 |
-| `OURA_REFRESH_TOKEN` | From step 2 |
+| `OURA_ACCESS_TOKEN` | Personal Access Token from step 1 |
 | `KILOMETRIKISA_USERNAME` | Your Kilometrikisa email/username |
 | `KILOMETRIKISA_PASSWORD` | Your Kilometrikisa password |
-| `GH_PAT` | A GitHub Personal Access Token (see below) |
 
-**Creating the `GH_PAT`** (needed for automatic refresh token rotation):
-1. Go to [github.com/settings/tokens](https://github.com/settings/tokens)
-2. Generate a **fine-grained token** scoped to this repo with **Secrets: Read and write** permission, or a classic token with `repo` scope
-3. Store it as the `GH_PAT` secret
-
-### 5. Done!
+### 4. Done!
 
 The workflow runs daily at 03:00 Helsinki time. You can also trigger it manually from the Actions tab.
 
@@ -63,9 +46,7 @@ The workflow runs daily at 03:00 Helsinki time. You can also trigger it manually
 Create a `.env` file (already in `.gitignore`):
 
 ```
-OURA_CLIENT_ID=...
-OURA_CLIENT_SECRET=...
-OURA_REFRESH_TOKEN=...
+OURA_ACCESS_TOKEN=...
 KILOMETRIKISA_USERNAME=...
 KILOMETRIKISA_PASSWORD=...
 ```
@@ -86,14 +67,6 @@ python sync.py --date 2026-05-05
 # Sync yesterday (default)
 python sync.py
 ```
-
-**Important:** Each run consumes the Oura refresh token (they are single-use). After local testing, re-run `python auth_setup.py` and update both your `.env` and the `OURA_REFRESH_TOKEN` GitHub secret so the scheduled run doesn't break.
-
-## Refresh token rotation
-
-Oura's OAuth2 issues a new refresh token each time you use the old one. When running on GitHub Actions, the script automatically updates the `OURA_REFRESH_TOKEN` secret via the `gh` CLI (pre-installed on runners). This requires a `GH_PAT` with write access to secrets.
-
-If rotation fails (e.g., wrong PAT permissions), the sync still completes but logs a warning with the new token. You can then update the secret manually, or re-run `auth_setup.py`.
 
 ## Notes
 

@@ -1,18 +1,16 @@
 """
 Oura API v2 client for fetching cycling workout data.
 
-Handles OAuth2 token refresh and automatic rotation of the refresh token
-stored in GitHub Actions secrets.
+Uses a Personal Access Token for authentication (no refresh needed).
+Create one at https://cloud.ouraring.com/personal-access-tokens
 """
 
 import logging
 import os
-import subprocess
 from datetime import date, timedelta
 
 import requests
 
-TOKEN_URL = "https://api.ouraring.com/oauth/token"
 WORKOUTS_URL = "https://api.ouraring.com/v2/usercollection/workout"
 
 logger = logging.getLogger(__name__)
@@ -20,77 +18,7 @@ logger = logging.getLogger(__name__)
 
 class OuraClient:
     def __init__(self):
-        self.client_id = os.environ["OURA_CLIENT_ID"]
-        self.client_secret = os.environ["OURA_CLIENT_SECRET"]
-        self.refresh_token = os.environ["OURA_REFRESH_TOKEN"]
-        self.access_token: str | None = None
-
-    def _refresh_access_token(self):
-        """Exchange the refresh token for a new access + refresh token pair."""
-        logger.info("Refreshing Oura access token...")
-        resp = requests.post(
-            TOKEN_URL,
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": self.refresh_token,
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-            },
-        )
-        if not resp.ok:
-            logger.error(
-                "Token refresh failed (%d): %s", resp.status_code, resp.text
-            )
-            resp.raise_for_status()
-
-        tokens = resp.json()
-        self.access_token = tokens["access_token"]
-        new_refresh_token = tokens["refresh_token"]
-
-        # Rotate the secret BEFORE doing anything else -- if this fails and
-        # we continue, the old secret is already invalid (single-use token).
-        if new_refresh_token != self.refresh_token:
-            self.refresh_token = new_refresh_token
-            try:
-                self._rotate_github_secret(new_refresh_token)
-            except RuntimeError:
-                logger.warning(
-                    "Could not rotate refresh token in GitHub Secrets. "
-                    "New token: %s -- update OURA_REFRESH_TOKEN manually!",
-                    new_refresh_token,
-                )
-
-    def _rotate_github_secret(self, new_token: str):
-        """Update OURA_REFRESH_TOKEN in GitHub Actions secrets."""
-        repo = os.environ.get("GH_REPO")
-        gh_token = os.environ.get("GH_TOKEN")
-        if not repo or not gh_token:
-            logger.warning(
-                "GH_REPO or GH_TOKEN not set; skipping refresh token rotation. "
-                "The next run may fail if Oura invalidated the old token."
-            )
-            return
-
-        logger.info("Rotating OURA_REFRESH_TOKEN in GitHub secrets...")
-        result = subprocess.run(
-            [
-                "gh", "secret", "set", "OURA_REFRESH_TOKEN",
-                "--body", new_token,
-                "--repo", repo,
-            ],
-            capture_output=True,
-            text=True,
-            env={**os.environ, "GH_TOKEN": gh_token},
-        )
-        if result.returncode != 0:
-            logger.error("Failed to rotate secret: %s", result.stderr)
-            raise RuntimeError(f"gh secret set failed: {result.stderr}")
-        logger.info("Refresh token rotated successfully.")
-
-    def _get_headers(self) -> dict:
-        if not self.access_token:
-            self._refresh_access_token()
-        return {"Authorization": f"Bearer {self.access_token}"}
+        self.access_token = os.environ["OURA_ACCESS_TOKEN"]
 
     def get_cycling_km(self, day: date) -> float:
         """
@@ -100,6 +28,7 @@ class OuraClient:
         day_str = day.isoformat()
         logger.info("Fetching Oura workouts for %s...", day_str)
 
+        headers = {"Authorization": f"Bearer {self.access_token}"}
         all_workouts = []
         next_token = None
 
@@ -112,9 +41,7 @@ class OuraClient:
                 params["next_token"] = next_token
 
             resp = requests.get(
-                WORKOUTS_URL,
-                headers=self._get_headers(),
-                params=params,
+                WORKOUTS_URL, headers=headers, params=params,
             )
             resp.raise_for_status()
             data = resp.json()
