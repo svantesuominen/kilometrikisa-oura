@@ -3,7 +3,11 @@ name: Sync Oura to Kilometrikisa
 on:
   schedule:
     - cron: '0 0 * * *'  # 00:00 UTC = 03:00 EEST (Helsinki)
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Date to sync (YYYY-MM-DD). Defaults to yesterday.'
+        required: false
 
 jobs:
   sync:
@@ -19,7 +23,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run sync
-        run: python sync.py
+        run: python sync.py ${{ inputs.date && format('--date {0}', inputs.date) || '' }}
         env:
           OURA_ACCESS_TOKEN: ${{ secrets.OURA_ACCESS_TOKEN }}
           KILOMETRIKISA_USERNAME: ${{ secrets.KILOMETRIKISA_USERNAME }}
